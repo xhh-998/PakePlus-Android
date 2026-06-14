@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Buffer of Life</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --card: rgba(18, 18, 30, 0.75);
+    --card-border: rgba(255,255,255,0.06);
+    --accent: #a78bfa;
+    --accent2: #67e8f9;
+    --accent3: #f472b6;
+    --green: #4ade80;
+    --red: #f87171;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100dvh;overflow:hidden;
+    background:var(--bg);
+    color:var(--text);
+    font:14px/1.6 "Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  /* ── 星空背景 ── */
+  #starfield{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+  #tailfield{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+
+  /* ── 渐变光晕 ── */
+  .glow-orb{
+    position:fixed;border-radius:50%;filter:blur(120px);opacity:0.12;pointer-events:none;z-index:0;
+    animation:orbFloat 12s ease-in-out infinite;
+  }
+  .glow-orb.a{width:500px;height:500px;background:#8b5cf6;top:-15%;left:-10%;animation-delay:0s}
+  .glow-orb.b{width:400px;height:400px;background:#06b6d4;bottom:-10%;right:-8%;animation-delay:-4s}
+  .glow-orb.c{width:350px;height:350px;background:#ec4899;top:40%;left:60%;animation-delay:-8s}
+  @keyframes orbFloat{
+    0%,100%{transform:translate(0,0) scale(1)}
+    33%{transform:translate(30px,-20px) scale(1.1)}
+    66%{transform:translate(-20px,15px) scale(0.9)}
+  }
+
+  /* ── 主容器：flex 撑满全屏 ── */
+  .main{
+    position:relative;z-index:1;width:100%;max-width:420px;height:100dvh;
+    display:flex;flex-direction:column;align-items:center;
+    padding:24px 20px 16px;margin:0 auto;
+  }
+
+  /* ── 头部 ── */
+  .header{text-align:center;flex-shrink:0}
+  .header .brand{
+    font-size:26px;font-weight:800;letter-spacing:-0.5px;
+    background:linear-gradient(135deg, #c4b5fd, #67e8f9, #f0abfc, #fbbf24, #4ade80, #c4b5fd);
+    background-size:300% 100%;
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    background-clip:text;
+    animation:hueShift 5s ease-in-out infinite;
+  }
+  @keyframes hueShift{
+    0%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+    100%{background-position:0% 50%}
+  }
+  .header .subtitle{
+    font-size:10px;font-weight:500;color:var(--text2);letter-spacing:2px;
+    margin-top:-2px;min-height:16px;
+  }
+  .header .subtitle .cursor{
+    display:inline-block;width:1px;height:12px;
+    background:var(--accent);margin-left:1px;vertical-align:middle;
+    animation:blink 0.7s steps(2) infinite;
+  }
+
+  /* ── 全局状态条 ── */
+  .status-bar{
+    display:flex;gap:8px;margin:12px 0 0;flex-shrink:0;
+    background:var(--card);border:1px solid var(--card-border);
+    border-radius:20px;padding:8px 16px;backdrop-filter:blur(20px);
+    -webkit-backdrop-filter:blur(20px);
+  }
+  .status-bar .sb-dot{width:7px;height:7px;border-radius:50%;margin-top:4px;flex-shrink:0}
+  .status-bar .sb-dot.all-on{background:var(--green);box-shadow:0 0 8px rgba(74,222,128,.5)}
+  .status-bar .sb-dot.partial{background:#fbbf24;box-shadow:0 0 8px rgba(251,191,36,.5)}
+  .status-bar .sb-dot.all-off{background:var(--red);box-shadow:0 0 8px rgba(248,113,113,.5)}
+  .status-bar .sb-text{font-size:11px;color:var(--text2)}
+
+  /* ── 星区：flex-grow 撑满剩余空间 ── */
+  .star-area{
+    position:relative;flex:1 1 auto;width:100%;min-height:0;
+    margin:4px 0;
+  }
+
+  /* ── 漂浮星体 ── */
+  .drift-star{
+    position:absolute;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    transition:opacity .6s;
+    pointer-events:auto;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  .drift-star.offline{opacity:0.4}
+  .drift-star.selected .ds-info{
+    position:relative;
+  }
+  .drift-star.selected .ds-info::before{
+    content:'';position:absolute;inset:0px -7px -3px -7px;pointer-events:none;border-radius:3px;
+    --c:rgba(255,255,255,0.25);--l:10px;--w:1.5px;
+    background:
+      linear-gradient(var(--c) 0 0) 0    0    / var(--l) var(--w) no-repeat,
+      linear-gradient(var(--c) 0 0) 0    0    / var(--w) var(--l) no-repeat,
+      linear-gradient(var(--c) 0 0) 100% 0    / var(--l) var(--w) no-repeat,
+      linear-gradient(var(--c) 0 0) 100% 0    / var(--w) var(--l) no-repeat,
+      linear-gradient(var(--c) 0 0) 0    100% / var(--l) var(--w) no-repeat,
+      linear-gradient(var(--c) 0 0) 0    100% / var(--w) var(--l) no-repeat,
+      linear-gradient(var(--c) 0 0) 100% 100% / var(--l) var(--w) no-repeat,
+      linear-gradient(var(--c) 0 0) 100% 100% / var(--w) var(--l) no-repeat;
+  }
+
+  .drift-star .ds-dot{
+    width:10px;height:10px;border-radius:50%;
+    background:#fff;
+    transition:box-shadow .6s,background .6s;
+    flex-shrink:0;
+  }
+  /* 三色光晕 —— 匹配尾迹 */
+  #ds-pc .ds-dot.online-glow{
+    box-shadow:0 0 10px 2px rgba(165,180,252,.7), 0 0 32px 8px rgba(129,140,248,.4);
+  }
+  #ds-pi .ds-dot.online-glow{
+    box-shadow:0 0 10px 2px rgba(251,191,36,.7), 0 0 32px 8px rgba(217,112,75,.4);
+  }
+  #ds-phone .ds-dot.online-glow{
+    box-shadow:0 0 10px 2px rgba(52,211,153,.7), 0 0 32px 8px rgba(5,150,105,.4);
+  }
+  .drift-star.offline .ds-dot{
+    background:#475569;
+    box-shadow:0 0 6px 1px rgba(71,85,105,.3);
+  }
+  .drift-star .ds-info{text-align:center;transition:opacity .35s}
+  .drift-star .ds-name{
+    font-size:13px;font-weight:700;letter-spacing:-0.2px;color:var(--text);
+    text-shadow:0 0 12px rgba(255,255,255,.2);
+    white-space:nowrap;
+  }
+  .drift-star.offline .ds-name{color:var(--text3);text-shadow:none}
+  .drift-star .ds-ip{
+    font-size:9px;color:var(--text3);margin-top:1px;
+    font-family:"SF Mono","Fira Code",monospace;
+  }
+  .drift-star .ds-status{
+    font-size:10px;font-weight:600;margin-top:2px;padding:1px 8px;border-radius:10px;
+    display:inline-block;white-space:nowrap;
+  }
+  .drift-star.online .ds-status{background:rgba(74,222,128,.1);color:var(--green)}
+  .drift-star.offline .ds-status{background:rgba(248,113,113,.1);color:var(--red)}
+
+  /* ── 底部操作区 ── */
+  .actions{width:100%;display:flex;flex-direction:column;gap:8px;flex-shrink:0}
+  .btn{
+    width:100%;padding:13px 20px;border:0;border-radius:16px;
+    font-size:14px;font-weight:700;cursor:pointer;
+    transition:all .25s cubic-bezier(.4,0,.2,1);
+    text-align:center;text-decoration:none;display:flex;
+    align-items:center;justify-content:center;gap:8px;
+    position:relative;overflow:hidden;
+    letter-spacing:-0.2px;
+  }
+  .btn::after{
+    content:'';position:absolute;inset:0;
+    background:linear-gradient(135deg,rgba(255,255,255,.08),transparent);
+    opacity:0;transition:opacity .25s;
+  }
+  .btn:hover::after{opacity:1}
+  .btn:active{transform:scale(.97)}
+  /* -- PC (indigo #818cf8) -- */
+  .btn-pc{
+    background:linear-gradient(135deg,#818cf8,#6366f1);
+    color:#fff;box-shadow:0 4px 20px rgba(129,140,248,.3);
+  }
+  .btn-pc:hover{box-shadow:0 6px 28px rgba(129,140,248,.45);transform:translateY(-1px)}
+  .btn-pc-ghost{
+    background:transparent;color:#a5b4fc;
+    border:1.5px solid rgba(129,140,248,.25);
+  }
+  .btn-pc-ghost:hover{border-color:rgba(129,140,248,.45);color:#c7d2fe;box-shadow:0 0 20px rgba(129,140,248,.1)}
+  /* -- Pi (copper #d9704b) -- */
+  .btn-pi{
+    background:linear-gradient(135deg,#d9704b,#b85d3a);
+    color:#fff;box-shadow:0 4px 20px rgba(217,112,75,.3);
+  }
+  .btn-pi:hover{box-shadow:0 6px 28px rgba(217,112,75,.45);transform:translateY(-1px)}
+  .btn-pi-ghost{
+    background:transparent;color:#e8a98a;
+    border:1.5px solid rgba(217,112,75,.25);
+  }
+  .btn-pi-ghost:hover{border-color:rgba(217,112,75,.45);color:#f0c4aa;box-shadow:0 0 20px rgba(217,112,75,.1)}
+  /* -- Phone (emerald #059669) -- */
+  .btn-phone{
+    background:linear-gradient(135deg,#059669,#047857);
+    color:#fff;box-shadow:0 4px 20px rgba(5,150,105,.3);
+  }
+  .btn-phone:hover{box-shadow:0 6px 28px rgba(5,150,105,.45);transform:translateY(-1px)}
+  .btn-phone-ghost{
+    background:transparent;color:#34d399;
+    border:1.5px solid rgba(5,150,105,.25);
+  }
+  .btn-phone-ghost:hover{border-color:rgba(5,150,105,.45);color:#6ee7b7;box-shadow:0 0 20px rgba(5,150,105,.1)}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  /* ── Toast ── */
+  .toast{
+    width:100%;padding:10px 16px;border-radius:14px;font-size:12px;font-weight:600;
+    text-align:center;display:none;animation:slideUp .3s ease-out;flex-shrink:0;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  }
+  @keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .toast.info{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2);color:#fbbf24}
+  .toast.success{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);color:var(--green)}
+  .toast.error{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);color:var(--red)}
+
+  /* 上次在线 */
+  .last-seen{
+    text-align:center;font-size:10px;color:var(--text3);margin-top:4px;
+    display:flex;align-items:center;justify-content:center;gap:4px;
+  }
+  .last-seen .ls-dot{width:4px;height:4px;border-radius:50%;background:var(--text3)}
+
+  /* ── 底部 ── */
+  .footer{
+    flex-shrink:0;padding:8px 0 0;font-size:10px;color:#1e293b;
+    text-align:center;letter-spacing:1px;font-weight:500;
+  }
+
+  /* ── 响应式 ── */
+  @media (max-width:380px){
+    .main{padding:16px 14px 10px}
+    .header .brand{font-size:22px}
+    .btn{padding:11px 14px;font-size:13px;border-radius:14px}
+  }
+  @media (min-height:800px){
+    .star-area{margin:12px 0}
+  }
+</style>
+</head>
+<body>
+
+<!-- 星空背景 -->
+<canvas id="starfield"></canvas>
+
+<!-- 拖尾层 -->
+<canvas id="tailfield"></canvas>
+
+<!-- 渐变光晕 -->
+<div class="glow-orb a"></div>
+<div class="glow-orb b"></div>
+<div class="glow-orb c"></div>
+
+<!-- 主内容 -->
+<div class="main">
+  <div class="header">
+    <div class="brand">◈ Buffer of Life</div>
+    <div class="subtitle" id="subtitle"></div>
+  </div>
+
+  <!-- 全局状态 -->
+  <div class="status-bar" id="statusBar">
+    <div class="sb-dot" id="sbDot"></div>
+    <div class="sb-text" id="sbText">Detecting...</div>
+  </div>
+
+  <!-- 星区 -->
+  <div class="star-area" id="starArea">
+    <div class="drift-star" id="ds-pc">
+      <div class="ds-dot"></div>
+      <div class="ds-info">
+        <div class="ds-name">FA608FP</div>
+        <div class="ds-ip">100.83.231.37</div>
+        <div class="ds-status" id="st-pc">--</div>
+      </div>
+    </div>
+    <div class="drift-star" id="ds-pi">
+      <div class="ds-dot"></div>
+      <div class="ds-info">
+        <div class="ds-name">Raspberry Pi</div>
+        <div class="ds-ip">100.111.158.33</div>
+        <div class="ds-status" id="st-pi">--</div>
+      </div>
+    </div>
+    <div class="drift-star" id="ds-phone">
+      <div class="ds-dot"></div>
+      <div class="ds-info">
+        <div class="ds-name">redmi-turbo-4</div>
+        <div class="ds-ip">100.83.200.68</div>
+        <div class="ds-status" id="st-phone">--</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 操作区 -->
+  <div class="actions" id="actions"></div>
+
+  <!-- Toast -->
+  <div class="toast" id="msg"></div>
+
+  <div class="footer">Tailscale Mesh · Encrypted</div>
+</div>
+
+<script>
+// ── 星空背景动画 ──
+(function(){
+  var c=document.getElementById('starfield'),ctx=c.getContext('2d'),stars=[];
+  function resize(){c.width=window.innerWidth;c.height=window.innerHeight}
+  resize();window.addEventListener('resize',resize);
+  for(var i=0;i<120;i++)stars.push({x:Math.random()*4000,y:Math.random()*4000,r:Math.random()*1.6+0.3,o:Math.random(),s:Math.random()*0.008+0.002});
+  function draw(){
+    ctx.clearRect(0,0,c.width,c.height);
+    for(var i=0;i<stars.length;i++){
+      var s=stars[i],ox=(s.x*0.3+s.y*0.7)%c.width,oy=(s.y*0.3-s.x*0.7+c.height)%c.height;
+      s.o+=s.s;var a=0.3+0.7*Math.abs(Math.sin(s.o));
+      ctx.beginPath();ctx.arc(ox,oy,s.r,0,Math.PI*2);
+      ctx.fillStyle='rgba(255,255,255,'+a+')';ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ── Lissajous 轨道 + 彗尾 ──
+(function(){
+  var area = document.getElementById('starArea');
+  var tailCanvas = document.getElementById('tailfield');
+  var tailCtx = tailCanvas.getContext('2d');
+
+  function resizeTail(){
+    tailCanvas.width = window.innerWidth;
+    tailCanvas.height = window.innerHeight;
+  }
+  resizeTail();
+  window.addEventListener('resize', function(){
+    resizeTail();
+    // resize 时清空拖尾避免拉伸残留
+    tailCtx.clearRect(0, 0, tailCanvas.width, tailCanvas.height);
+  });
+
+  var els = {
+    pc:    document.getElementById('ds-pc'),
+    pi:    document.getElementById('ds-pi'),
+    phone: document.getElementById('ds-phone')
+  };
+
+  // 焦点轨道 — 极扁彗星轨道，近日暴冲、远日极缓
+  // r(θ) = a(1-e²)/(1+e*cosθ)   dθ/dt = baseSpeed / r
+  // { a(半长轴%), e(离心率0-1), rot(rad), baseSpeed }
+  var CENTER_X = 78, CENTER_Y = 48;
+  var orbits = {
+    pc:    {a:20, e:0.90, rot: 0.4,  baseSpeed:85.0},
+    pi:    {a:28, e:0.92, rot:-0.5,  baseSpeed:100.0},
+    phone: {a:36, e:0.93, rot: 0.2,  baseSpeed:115.0}
+  };
+
+  // 角度状态
+  var state = {
+    pc:    {theta: Math.PI},     // 从远日点开始
+    pi:    {theta: Math.PI},
+    phone: {theta: Math.PI}
+  };
+
+  // 尾迹颜色
+  var colors = {
+    pc:    'rgba(129,140,248,0.45)',
+    pi:    'rgba(217,112,75,0.45)',
+    phone: 'rgba(5,150,105,0.45)'
+  };
+
+  // 位置历史
+  var MAX_HISTORY = 100;
+  var posHistory = {pc:[], pi:[], phone:[]};
+
+  function getDotPixelPos(k){
+    var dot = els[k].querySelector('.ds-dot');
+    var rect = dot.getBoundingClientRect();
+    return { px: rect.left + rect.width/2, py: rect.top + rect.height/2 };
+  }
+
+  var lastTs2 = null;
+
+  function animate(ts){
+    if (lastTs2 === null){ lastTs2 = ts; requestAnimationFrame(animate); return; }
+    var dt = Math.min((ts - lastTs2) * 0.001, 0.05);
+    lastTs2 = ts;
+
+    // 1. 焦点轨道 — 计算原始偏移（不含 pan）
+    var curPos = {};
+    Object.keys(orbits).forEach(function(k){
+      var orb = orbits[k], st = state[k];
+      var e = orb.e, a = orb.a;
+      var cosTh = Math.cos(st.theta);
+      var r = a * (1 - e*e) / (1 + e * cosTh);
+      var dtheta = orb.baseSpeed / Math.pow(Math.max(r, 1.0), 2.0) * dt;
+      dtheta = Math.min(dtheta, 0.9);
+      st.theta += dtheta;
+
+      var thRot = st.theta + orb.rot;
+      var ox = r * Math.cos(thRot);
+      var oy = r * Math.sin(thRot);
+      curPos[k] = { ox: ox, oy: oy };
+    });
+
+    // 1.5 Position elements
+    Object.keys(orbits).forEach(function(k){
+      var p = curPos[k];
+      p.x = CENTER_X + p.ox;
+      p.y = CENTER_Y + p.oy;
+      els[k].style.left = p.x + '%';
+      els[k].style.top = p.y + '%';
+      els[k].style.transform = 'translate(-50%,-50%)';
+    });
+
+    // 2. 记录像素位置到历史
+    Object.keys(orbits).forEach(function(k){
+      var pix = getDotPixelPos(k);
+      posHistory[k].push(pix);
+      if (posHistory[k].length > MAX_HISTORY) posHistory[k].shift();
+    });
+
+    // 3. 距离检测 → 渐变隐去信息
+    var keys = Object.keys(orbits);
+    var HIDE_DIST = 22, FADE_START = 42;
+    keys.forEach(function(k){
+      var minDist = Infinity;
+      for (var j=0;j<keys.length;j++){
+        if (k === keys[j]) continue;
+        var dx = curPos[k].x - curPos[keys[j]].x;
+        var dy = curPos[k].y - curPos[keys[j]].y;
+        var d = Math.sqrt(dx*dx + dy*dy);
+        if (d < minDist) minDist = d;
+      }
+      var opacity = Math.max(0, Math.min(1, (minDist - HIDE_DIST) / (FADE_START - HIDE_DIST)));
+      els[k].querySelector('.ds-info').style.opacity = (k === selectedStar) ? '1' : String(opacity);
+    });
+
+    // 4. 全清 + 画中心光点
+    tailCtx.clearRect(0, 0, tailCanvas.width, tailCanvas.height);
+    var areaRect = area.getBoundingClientRect();
+    var cpX = areaRect.left + areaRect.width * CENTER_X / 100;
+    var cpY = areaRect.top + areaRect.height * CENTER_Y / 100;
+    tailCtx.beginPath();
+    tailCtx.arc(cpX, cpY, 14, 0, Math.PI*2);
+    var cGrad = tailCtx.createRadialGradient(cpX, cpY, 0, cpX, cpY, 18);
+    cGrad.addColorStop(0, 'rgba(167,139,250,0.18)');
+    cGrad.addColorStop(0.5, 'rgba(167,139,250,0.05)');
+    cGrad.addColorStop(1, 'rgba(167,139,250,0)');
+    tailCtx.fillStyle = cGrad;
+    tailCtx.fill();
+
+    // 5. 从历史重绘尾迹
+    Object.keys(orbits).forEach(function(k){
+      var hist = posHistory[k];
+      if (hist.length < 2) return;
+      for (var i=1;i<hist.length;i++){
+        var alpha = (i / hist.length) * 0.38;
+        tailCtx.beginPath();
+        tailCtx.moveTo(hist[i-1].px, hist[i-1].py);
+        tailCtx.lineTo(hist[i].px, hist[i].py);
+        tailCtx.strokeStyle = colors[k].replace(/0\.\d+/, alpha.toFixed(2));
+        tailCtx.lineWidth = 0.8 + 1.4 * (i/hist.length);
+        tailCtx.lineCap = 'round';
+        tailCtx.stroke();
+      }
+      var last = hist[hist.length-1];
+      tailCtx.beginPath();
+      tailCtx.arc(last.px, last.py, 2.5, 0, Math.PI*2);
+      tailCtx.fillStyle = colors[k];
+      tailCtx.shadowColor = colors[k];
+      tailCtx.shadowBlur = 10;
+      tailCtx.fill();
+      tailCtx.shadowBlur = 0;
+    });
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+})();
+
+var PI_BASE = 'http://100.111.158.33:8001';
+var TERMINAL_URL = 'http://100.83.231.37:8091/';
+var selectedStar = 'pc';
+
+// Star click selection
+['pc','pi','phone'].forEach(function(k){
+  document.getElementById('ds-'+k).addEventListener('click', function(e){
+    e.stopPropagation();
+    selectStar(k);
+  });
+});
+// Click elsewhere: deselect + restore center (keep buttons)
+document.getElementById('starArea').addEventListener('click', function(e){
+  if (e.target === e.currentTarget || !e.target.closest('.drift-star')){
+    document.querySelectorAll('.drift-star').forEach(function(el){ el.classList.remove('selected'); });
+    selectedStar = null;
+  }
+});
+
+function selectStar(k){
+  if (selectedStar === k) return;
+  selectedStar = k;
+  document.querySelectorAll('.drift-star').forEach(function(el){ el.classList.remove('selected'); });
+  document.getElementById('ds-'+k).classList.add('selected');
+  updateButtons();
+}
+
+function updateButtons(){
+  var act = document.getElementById('actions');
+  var devs = {};
+  try { devs = JSON.parse(localStorage.getItem('_lastStatus')||'{}').devices||{}; } catch(e){}
+  var pcOn = (devs.computer||{}).online!==false;
+  var piOn = (devs.pi||{}).online!==false;
+  var phoneOn = (devs.phone||{}).online!==false;
+
+  if (selectedStar === 'pc'){
+    if (pcOn){
+      act.innerHTML =
+        '<a class="btn btn-pc" href="'+TERMINAL_URL+'">'+
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>'+
+          'Open Terminal'+
+        '</a>'+
+        '<button class="btn btn-pc-ghost" onclick="location.href=PI_BASE+\'/computer_dashboard\'">'+
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="14" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="17"/></svg>'+
+          'Dashboard'+
+        '</button>';
+    } else {
+      var ls = (devs.computer||{}).last_seen||'';
+      var lt='Unknown';
+      if(ls){try{var dt=new Date(ls);lt=(dt.getMonth()+1)+'/'+dt.getDate()+' '+dt.getHours()+':'+String(dt.getMinutes()).padStart(2,'0')}catch(e){}}
+      act.innerHTML =
+        '<button class="btn btn-pc-ghost" id="wakeBtn" onclick="doWake()" style="animation:shimmer 2.5s ease-in-out infinite;background-image:linear-gradient(105deg,transparent 40%,rgba(129,140,248,.06) 50%,transparent 60%);background-size:200% 100%">'+
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>'+
+          'Wake FA608FP'+
+        '</button>'+
+        '<div class="last-seen"><span class="ls-dot"></span> Last seen '+lt+' · Auto-detecting</div>';
+    }
+  } else if (selectedStar === 'pi'){
+    act.innerHTML =
+      '<a class="btn btn-pi" href="http://100.111.158.33/" target="_blank">'+
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'+
+        'NAC \u00b7 CasaOS'+
+      '</a>'+
+      '<button class="btn btn-pi-ghost" onclick="location.href=PI_BASE+\'/pi_dashboard\'">'+
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'+
+        'Pi Dashboard'+
+      '</button>';
+  } else if (selectedStar === 'phone'){
+    act.innerHTML =
+      '<a class="btn btn-phone" href="http://100.111.158.33:8000/" target="_blank">'+
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'+
+        'My Footprints'+
+      '</a>'+
+      '<button class="btn btn-phone-ghost" onclick="alert(\'\u8fdc\u7a0b\u547c\u53eb \u2014 \u5f85\u5b9e\u73b0\')">'+
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>'+
+        'Ring Phone'+
+      '</button>';
+  }
+}
+
+function render(data) {
+  var devices = data.devices || {};
+  var map = {pc:'computer',phone:'phone',pi:'pi'};
+  var onlineCount = 0;
+  try { localStorage.setItem('_lastStatus', JSON.stringify(data)); } catch(e){}
+
+  ['pc','phone','pi'].forEach(function(k) {
+    var dev = devices[map[k]] || {};
+    var on = dev.online !== false;
+    if (on) onlineCount++;
+    var ds = document.getElementById('ds-'+k);
+    var st = document.getElementById('st-'+k);
+    ds.classList.remove('online','offline');
+    ds.classList.add(on ? 'online' : 'offline');
+    var dot = ds.querySelector('.ds-dot');
+    dot.className = 'ds-dot' + (on ? ' online-glow' : '');
+    st.textContent = on ? ('Online' + (dev.latency_ms ? ' ' + dev.latency_ms + 'ms' : '')) : 'Offline';
+  });
+
+  // 状态条
+  var sbDot = document.getElementById('sbDot');
+  var sbText = document.getElementById('sbText');
+  sbDot.className = 'sb-dot ' + (onlineCount===3?'all-on':onlineCount===0?'all-off':'partial');
+  sbText.textContent = onlineCount===3?'All Online':onlineCount===0?'All Offline':onlineCount+'/3 Online';
+
+  // 操作按钮
+  updateButtons();
+}
+
+// ── Wake ──
+function doWake(){
+  var btn=document.getElementById('wakeBtn');
+  var msg=document.getElementById('msg');
+  btn.disabled=true;btn.textContent='Sending...';
+  msg.className='toast';msg.style.display='none';
+  fetch(PI_BASE+'/api/bridge/wake',{method:'POST'})
+    .then(function(r){return r.json()})
+    .then(function(data){
+      msg.textContent=data.msg;msg.className='toast '+(data.ok?'success':'info');msg.style.display='block';
+      btn.textContent=data.ok?'Sent':'HW not connected';
+      var count=0;
+      var fast=setInterval(function(){
+        refresh();count++;
+        if(document.getElementById('ds-pc').className.indexOf('online')>=0||count>30)clearInterval(fast);
+      },1000);
+    })
+    .catch(function(){
+      msg.textContent='Request failed';msg.className='toast error';msg.style.display='block';
+      btn.disabled=false;btn.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Wake FA608FP';
+    });
+}
+
+// ── Shutdown ──
+function doShutdown(){
+  if(!confirm('Shutdown FA608FP remotely?'))return;
+  var msg=document.getElementById('msg');
+  fetch(PI_BASE+'/api/bridge/shutdown',{method:'POST'})
+    .then(function(r){return r.json()})
+    .then(function(data){msg.textContent=data.msg;msg.className='toast info';msg.style.display='block'})
+    .catch(function(){msg.textContent='Request failed';msg.className='toast error';msg.style.display='block'});
+}
+
+// ── 轮询 ──
+function refresh(){
+  fetch(PI_BASE+'/api/bridge/status')
+    .then(function(r){return r.json()})
+    .then(render)
+    .catch(function(){});
+}
+refresh();
+setInterval(refresh,10000);
+
+// 副标题打字机：中英文定时切换
+(function(){
+  var el = document.getElementById('subtitle');
+  var texts = ['生命缓冲区', 'To build connect'];
+  var idx = 0, charIdx = 0, deleting = false;
+  var typeSpeed = 120, deleteSpeed = 60, pauseMs = 2500;
+
+  function tick(){
+    var full = texts[idx];
+    if (!deleting){
+      charIdx++;
+      el.innerHTML = full.substring(0, charIdx) + '<span class="cursor"></span>';
+      if (charIdx >= full.length){
+        deleting = true;
+        setTimeout(tick, pauseMs);
+        return;
+      }
+      setTimeout(tick, typeSpeed);
+    } else {
+      charIdx--;
+      el.innerHTML = full.substring(0, charIdx) + '<span class="cursor"></span>';
+      if (charIdx <= 0){
+        deleting = false;
+        idx = (idx + 1) % texts.length;
+        setTimeout(tick, 400);
+        return;
+      }
+      setTimeout(tick, deleteSpeed);
+    }
+  }
+  tick();
+})();
+</script>
+</body>
+</html>
